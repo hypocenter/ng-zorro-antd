@@ -8,7 +8,9 @@ import {
   QueryList,
   TemplateRef
 } from '@angular/core';
-import { Subscription } from 'rxjs/Subscription';
+
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 import { toBoolean } from '../core/util/convert';
 
@@ -21,18 +23,15 @@ export type NzSizeType = 'default' | 'small';
 @Component({
   selector           : 'nz-steps',
   preserveWhitespaces: false,
-  template           : `
-    <div class="ant-steps" [ngClass]="stepsClassMap">
-      <ng-content></ng-content>
-    </div>
-  `
+  templateUrl        : './nz-steps.component.html'
 })
 export class NzStepsComponent implements OnInit, OnDestroy, AfterContentInit {
   private _status: NzStatusType = 'process';
   private _current = 0;
   private _size: NzSizeType = 'default';
   private _direction: NzDirectionType = 'horizontal';
-  private stepsSubscription: Subscription;
+  private unsubscribe$ = new Subject<void>();
+
   stepsClassMap: object;
   showProcessDot = false;
   customProcessDotTemplate: TemplateRef<{ $implicit: TemplateRef<void>, status: string, index: number }>;
@@ -122,16 +121,14 @@ export class NzStepsComponent implements OnInit, OnDestroy, AfterContentInit {
   }
 
   ngOnDestroy(): void {
-    if (this.stepsSubscription) {
-      this.stepsSubscription.unsubscribe();
-      this.stepsSubscription = null;
-    }
+    this.unsubscribe$.next();
+    this.unsubscribe$.complete();
   }
 
   ngAfterContentInit(): void {
     Promise.resolve().then(() => this.updateChildrenSteps());
     if (this.steps) {
-      this.stepsSubscription = this.steps.changes.subscribe(this.updateChildrenSteps);
+       this.steps.changes.pipe(takeUntil(this.unsubscribe$)).subscribe(this.updateChildrenSteps);
     }
   }
 }

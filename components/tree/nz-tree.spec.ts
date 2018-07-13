@@ -3,8 +3,7 @@ import { async, fakeAsync, tick, ComponentFixture, TestBed } from '@angular/core
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { Observable } from 'rxjs/Observable';
-import { of } from 'rxjs/observable/of';
+import { of, Observable } from 'rxjs';
 import { dispatchMouseEvent, dispatchTouchEvent } from '../core/testing/dispatch-events';
 import { NzFormatBeforeDropEvent, NzFormatEmitEvent } from './interface';
 import { NzTreeNode } from './nz-tree-node';
@@ -45,9 +44,9 @@ describe('tree component test', () => {
       expect(allSelectedKeys[ 1 ].getAttribute('title')).toEqual('child1.1');
       expect(treeInstance.treeComponent.getSelectedNodeList().length).toEqual(2);
 
-      // checked
+      // checked(child1 has disabled nodes)
       const allCheckedKeys = treeElement.querySelectorAll('.ant-tree-checkbox-checked');
-      expect(allCheckedKeys.length).toEqual(4);
+      expect(allCheckedKeys.length).toEqual(2);
       // merged to one node
       expect(treeInstance.treeComponent.getCheckedNodeList().length).toEqual(1);
       // expanded
@@ -104,31 +103,41 @@ describe('tree component test', () => {
       const expandSpy = spyOn(treeInstance, 'onExpand');
       // detect changes
       fixture.detectChanges();
-      expect(treeElement.querySelectorAll('.ant-tree-checkbox-checked').length).toEqual(4);
+      // 2 checked in default(3 disabled not be contained)
+      expect(treeElement.querySelectorAll('.ant-tree-checkbox-checked').length).toEqual(2);
       // check child1
       let targetNode = treeElement.querySelectorAll('.ant-tree-checkbox')[ 0 ];
       expect(targetNode.classList).toContain('ant-tree-checkbox-indeterminate');
       dispatchMouseEvent(targetNode, 'click');
       fixture.detectChanges();
       targetNode = treeElement.querySelectorAll('.ant-tree-checkbox')[ 0 ];
-      expect(targetNode.classList).toContain('ant-tree-checkbox-checked');
-      // all nodes inside root1 are checked
-      expect(treeElement.querySelectorAll('.ant-tree-checkbox-checked').length).toEqual(6);
-      expect(checkSpy).toHaveBeenCalled();
+      // all nodes inside root1 are checked(except 2 disabled)
+      expect(treeElement.querySelectorAll('.ant-tree-checkbox-checked').length).toEqual(5);
       expect(checkSpy).toHaveBeenCalledTimes(1);
       // for bug test https://github.com/NG-ZORRO/ng-zorro-antd/issues/1423
       // auto merge child node
       expect(treeInstance.treeComponent.getCheckedNodeList().length).toEqual(1);
-      expect(treeInstance.treeComponent.getCheckedNodeList()[0].title).toEqual('root1');
+      expect(treeInstance.treeComponent.getCheckedNodeList()[ 0 ].title).toEqual('root1');
       // cancel checked status
       dispatchMouseEvent(targetNode, 'click');
       fixture.detectChanges();
+
+      // click node grandchild1.2.1 to test disabled node.(won't effect parent node)
+      targetNode = treeElement.querySelectorAll('.ant-tree-checkbox')[ 4 ];
+      dispatchMouseEvent(targetNode, 'click');
+      fixture.detectChanges();
+      expect(treeInstance.treeComponent.getCheckedNodeList().length).toEqual(1);
+      dispatchMouseEvent(targetNode, 'click');
+      fixture.detectChanges();
+
       expect(treeElement.querySelectorAll('.ant-tree-checkbox-checked').length).toEqual(0);
       expect(treeInstance.treeComponent.getCheckedNodeList().length).toEqual(0);
-      // click toggle checked
+      // test half checked nodes, click child1.1, just root1 halfchecked(child1 is full checked)
+      targetNode = treeElement.querySelectorAll('.ant-tree-checkbox')[ 2 ];
       dispatchMouseEvent(targetNode, 'click');
-      dispatchMouseEvent(targetNode, 'click');
-      // click disabled node
+      fixture.detectChanges();
+      expect(treeInstance.treeComponent.getHalfCheckedNodeList().length).toEqual(1);
+      // // click disabled node
       targetNode = treeElement.querySelector('.ant-tree-checkbox-disabled');
       dispatchMouseEvent(targetNode, 'click');
       fixture.detectChanges();
@@ -163,7 +172,7 @@ describe('tree component test', () => {
       const searchSpy = spyOn(treeInstance, 'onSearch');
       treeInstance.searchValue = 'grand';
       fixture.detectChanges();
-      expect(treeElement.querySelectorAll('.font-red').length).toEqual(3);
+      expect(treeElement.querySelectorAll('.font-highlight').length).toEqual(5);
       expect(searchSpy).toHaveBeenCalled();
       expect(searchSpy).toHaveBeenCalledTimes(1);
     });
@@ -566,7 +575,7 @@ class NzDemoStrictTreeComponent {
 class NzDemoBasicTreeComponent {
   @ViewChild(NzTreeComponent) treeComponent: NzTreeComponent;
   expandKeys = [ '1001', '10001' ];
-  checkedKeys = [ '10001', '100012' ];
+  checkedKeys = [ '10001' ];
   selectedKeys = [ '10001', '100011' ];
   multiple = true;
   expandDefault = false;
@@ -590,18 +599,18 @@ class NzDemoBasicTreeComponent {
             {
               title   : 'child1.2',
               key     : '100012',
+              disabled: true,
               children: [
                 {
-                  title   : 'grandchild1.2.1',
-                  key     : '1000121',
-                  isLeaf  : true,
-                  disabled: true
+                  title : 'grandchild1.2.1',
+                  key   : '1000121',
+                  isLeaf: true
                 },
                 {
-                  title  : 'grandchild1.2.2',
-                  key    : '1000122',
-                  isLeaf : true,
-                  checked: true
+                  title          : 'grandchild1.2.2',
+                  key            : '1000122',
+                  isLeaf         : true,
+                  disableCheckbox: true
                 }
               ]
             }
@@ -620,8 +629,21 @@ class NzDemoBasicTreeComponent {
         {
           title          : 'child2.1',
           key            : '10021',
-          children       : [],
-          disableCheckbox: true
+          disableCheckbox: true,
+          children       : [
+            {
+              title          : 'grandchild2.1.1',
+              key            : '100211',
+              isLeaf         : true,
+              disableCheckbox: true
+            },
+            {
+              title          : 'grandchild2.1.2',
+              key            : '1002112',
+              isLeaf         : true,
+              disableCheckbox: true
+            }
+          ]
         },
         {
           title   : 'child2.2',

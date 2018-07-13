@@ -13,38 +13,27 @@ import {
   Renderer2,
   ViewChild
 } from '@angular/core';
-import { Subscription } from 'rxjs/Subscription';
-import { toBoolean } from '../core/util/convert';
+
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+
+import { toBoolean, toNumber } from '../core/util/convert';
 
 import { NzCarouselContentDirective } from './nz-carousel-content.directive';
 
 @Component({
   selector           : 'nz-carousel',
   preserveWhitespaces: false,
-  template           : `
-    <div class="slick-initialized slick-slider" [class.slick-vertical]="nzVertical">
-      <div class="slick-list" #slickList tabindex="-1" (keydown)="onKeyDown($event)">
-        <div class="slick-track" [style.transform]="transform" #slickTrack>
-          <ng-content></ng-content>
-        </div>
-      </div>
-      <ul class="slick-dots" *ngIf="nzDots">
-        <li
-          *ngFor="let content of slideContents; let i =index"
-          [class.slick-active]="content.isActive"
-          (click)="setActive(content,i)">
-          <button>{{i + 1}}</button>
-        </li>
-      </ul>
-    </div>`,
+  templateUrl        : './nz-carousel.component.html',
   host               : {
     '[class.ant-carousel]': 'true'
   },
   styles             : [
-      `
+    `
       :host {
         display: block;
         position: relative;
+        overflow: hidden;
         width: 100%;
         height: 100%;
       }
@@ -67,10 +56,12 @@ import { NzCarouselContentDirective } from './nz-carousel-content.directive';
 })
 export class NzCarouselComponent implements AfterViewInit, OnDestroy, AfterContentInit {
   private _autoPlay = false;
+  private _autoPlaySpeed = 3000;
   private _dots = true;
   private _vertical = false;
   private _effect = 'scrollx';
-  slideContentsSubscription: Subscription;
+  private unsubscribe$ = new Subject<void>();
+
   activeIndex = 0;
   transform = 'translate3d(0px, 0px, 0px)';
   timeout;
@@ -116,6 +107,16 @@ export class NzCarouselComponent implements AfterViewInit, OnDestroy, AfterConte
 
   get nzAutoPlay(): boolean {
     return this._autoPlay;
+  }
+
+  @Input()
+  set nzAutoPlaySpeed(value: number) {
+    this._autoPlaySpeed = toNumber(value, null);
+    this.setUpAutoPlay();
+  }
+
+  get nzAutoPlaySpeed(): number {
+    return this._autoPlaySpeed;
   }
 
   @Input()
@@ -185,10 +186,10 @@ export class NzCarouselComponent implements AfterViewInit, OnDestroy, AfterConte
 
   setUpAutoPlay(): void {
     this.clearTimeout();
-    if (this.nzAutoPlay) {
+    if (this.nzAutoPlay && this.nzAutoPlaySpeed > 0) {
       this.timeout = setTimeout(_ => {
         this.setActive(this.slideContents.toArray()[ this.nextIndex ], this.nextIndex);
-      }, 3000);
+      }, this.nzAutoPlaySpeed);
     }
   }
 
@@ -240,17 +241,17 @@ export class NzCarouselComponent implements AfterViewInit, OnDestroy, AfterConte
   }
 
   ngAfterViewInit(): void {
-    this.slideContentsSubscription = this.slideContents.changes.subscribe(() => {
+    this.slideContents.changes
+    .pipe(takeUntil(this.unsubscribe$))
+    .subscribe(() => {
       this.renderContent();
     });
     this.renderContent();
   }
 
   ngOnDestroy(): void {
-    if (this.slideContentsSubscription) {
-      this.slideContentsSubscription.unsubscribe();
-      this.slideContentsSubscription = null;
-    }
+    this.unsubscribe$.next();
+    this.unsubscribe$.complete();
     this.clearTimeout();
   }
 

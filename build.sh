@@ -45,6 +45,11 @@ sed -e "s/from '.\//from '.\/src\//g" publish/src/index.d.ts > publish/antd.d.ts
 sed -e "s/\":\".\//\":\".\/src\//g" publish/src/index.metadata.json > publish/antd.metadata.json
 rm publish/src/index.d.ts publish/src/index.metadata.json
 
+echo 'Building schematics'
+npm run schematic:demo
+npm run schematic:build
+rm -rf schematics/demo
+
 echo 'Copying package.json'
 cp package.json publish/package.json
 

@@ -21,7 +21,10 @@ import {
   ViewChild,
   ViewContainerRef
 } from '@angular/core';
-import { Observable } from 'rxjs/Observable';
+
+import { Observable, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+
 import { NzMeasureScrollbarService } from '../core/services/nz-measure-scrollbar.service';
 
 import { InputBoolean } from '../core/util/convert';
@@ -47,6 +50,10 @@ type AnimationState = 'enter' | 'leave' | null;
 
 // tslint:disable-next-line:no-any
 export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> implements OnInit, OnChanges, AfterViewInit, OnDestroy, ModalOptions {
+  private unsubscribe$ = new Subject<void>();
+
+  // tslint:disable-next-line:no-any
+  locale: any = {};
   @Input() nzModalType: ModalType = 'default';
   @Input() nzContent: string | TemplateRef<{}> | Type<T>; // [STATIC] If not specified, will use <ng-content>
   @Input() nzComponentParams: object; // [STATIC] ONLY avaliable when nzContent is a component
@@ -81,11 +88,21 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
 
   // --- Predefined OK & Cancel buttons
   @Input() nzOkText: string;
+
+  get okText(): string {
+    return this.nzOkText || this.locale.okText;
+  }
+
   @Input() nzOkType = 'primary';
   @Input() @InputBoolean() nzOkLoading: boolean = false;
   @Input() @Output() nzOnOk: EventEmitter<T> | OnClickCallback<T> = new EventEmitter<T>();
   @ViewChild('autoFocusButtonOk', { read: ElementRef }) autoFocusButtonOk: ElementRef; // Only aim to focus the ok button that needs to be auto focused
   @Input() nzCancelText: string;
+
+  get cancelText(): string {
+    return this.nzCancelText || this.locale.cancelText;
+  }
+
   @Input() @InputBoolean() nzCancelLoading: boolean = false;
   @Input() @Output() nzOnCancel: EventEmitter<T> | OnClickCallback<T> = new EventEmitter<T>();
   @ViewChild('modalContainer') modalContainer: ElementRef;
@@ -104,7 +121,7 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
 
   constructor(
     private overlay: Overlay,
-    private locale: NzI18nService,
+    private i18n: NzI18nService,
     private renderer: Renderer2,
     private cfr: ComponentFactoryResolver,
     private elementRef: ElementRef,
@@ -117,6 +134,8 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
   }
 
   ngOnInit(): void {
+    this.i18n.localeChange.pipe(takeUntil(this.unsubscribe$)).subscribe(() => this.locale = this.i18n.getLocaleData('Modal'));
+
     if (this.isComponent(this.nzContent)) {
       this.createDynamicComponent(this.nzContent as Type<T>); // Create component along without View
     }
@@ -162,6 +181,8 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
     if (this.container instanceof OverlayRef) {
       this.container.dispose();
     }
+    this.unsubscribe$.next();
+    this.unsubscribe$.complete();
   }
 
   open(): void {
@@ -201,7 +222,12 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
   }
 
   onClickMask($event: MouseEvent): void {
-    if (this.nzMask && this.nzMaskClosable && ($event.target as HTMLElement).classList.contains('ant-modal-wrap')) {
+    if (
+      this.nzMask &&
+      this.nzMaskClosable &&
+      ($event.target as HTMLElement).classList.contains('ant-modal-wrap') &&
+      this.nzVisible
+    ) {
       this.onClickOkCancel('cancel');
     }
   }
@@ -211,7 +237,9 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
   }
 
   private onClickCloseBtn(): void {
-    this.onClickOkCancel('cancel');
+    if (this.nzVisible) {
+      this.onClickOkCancel('cancel');
+    }
   }
 
   private onClickOkCancel(type: 'ok' | 'cancel'): void {
@@ -253,6 +281,10 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
 
   // Do rest things when visible state changed
   private handleVisibleStateChange(visible: boolean, animation: boolean = true, closeResult?: R): Promise<void> {
+    if (visible) { // Hide scrollbar at the first time when shown up
+      this.changeBodyOverflow(1);
+    }
+
     return Promise
     .resolve(animation && this.animateTo(visible))
     .then(() => { // Emit open/close event after animations over
@@ -260,9 +292,10 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
         this.nzAfterOpen.emit();
       } else {
         this.nzAfterClose.emit(closeResult);
+        this.changeBodyOverflow(); // Show/hide scrollbar when animation is over
       }
-    })
-    .then(() => this.changeBodyOverflow());
+    });
+    // .then(() => this.changeBodyOverflow());
   }
 
   // Lookup a button's property, if the prop is a function, call & then return the result, otherwise, return itself.
@@ -373,10 +406,14 @@ export class NzModalComponent<T = any, R = any> extends NzModalRef<T, R> impleme
     // }
   }
 
-  private changeBodyOverflow(): void {
+  /**
+   * Take care of the body's overflow to decide the existense of scrollbar
+   * @param plusNum The number that the openModals.length will increase soon
+   */
+  private changeBodyOverflow(plusNum: number = 0): void {
     const openModals = this.modalControl.openModals;
 
-    if (openModals.length) {
+    if (openModals.length + plusNum > 0) {
       this.renderer.setStyle(this.document.body, 'padding-right', `${this.nzMeasureScrollbarService.scrollBarWidth}px`);
       this.renderer.setStyle(this.document.body, 'overflow', 'hidden');
     } else {
