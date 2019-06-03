@@ -1,69 +1,58 @@
-import { forwardRef, Component, Input, OnChanges, SimpleChanges, TemplateRef } from '@angular/core';
+/**
+ * @license
+ * Copyright Alibaba.com All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://github.com/NG-ZORRO/ng-zorro-antd/blob/master/LICENSE
+ */
+
+import {
+  forwardRef,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  Host,
+  Input,
+  Optional,
+  Renderer2,
+  ViewEncapsulation
+} from '@angular/core';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
 
-import { FunctionProp } from '../core/types/common-wrap';
-import { valueFunctionProp } from '../core/util/convert';
-import { NzI18nService } from '../i18n/nz-i18n.service';
-import { AbstractPickerComponent } from './abstract-picker.component';
-import { CandyDate } from './lib/candy-date';
-import { PanelMode } from './standard-types';
+import { NzNoAnimationDirective } from 'ng-zorro-antd/core';
+import { DateHelperService, NzI18nService } from 'ng-zorro-antd/i18n';
+
+import { HeaderPickerComponent, SupportHeaderPanel } from './header-picker.component';
 
 @Component({
+  encapsulation: ViewEncapsulation.None,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'nz-month-picker',
-  templateUrl: './month-picker.component.html',
-  providers: [{
-    provide: NG_VALUE_ACCESSOR,
-    multi: true,
-    useExisting: forwardRef(() => NzMonthPickerComponent)
-  }],
-  host               : {
-    '[class.ant-checkbox-group]': 'true'
-  }
+  exportAs: 'nzMonthPicker',
+  templateUrl: './header-picker.component.html',
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      multi: true,
+      useExisting: forwardRef(() => NzMonthPickerComponent)
+    }
+  ]
 })
-
-export class NzMonthPickerComponent extends AbstractPickerComponent implements OnChanges {
-  @Input() nzPlaceHolder: string;
-
-  @Input() nzRenderExtraFooter: FunctionProp<TemplateRef<void> | string>;
-  @Input() nzDefaultValue: CandyDate;
+export class NzMonthPickerComponent extends HeaderPickerComponent {
   @Input() nzFormat: string = 'yyyy-MM';
 
-  panelMode: PanelMode = 'month';
-  extraFooter: TemplateRef<void> | string;
+  endPanelMode: SupportHeaderPanel = 'month';
 
-  constructor(i18n: NzI18nService) {
-    super(i18n);
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    super.ngOnChanges(changes);
-
-    if (changes.nzRenderExtraFooter) {
-      this.extraFooter = valueFunctionProp(this.nzRenderExtraFooter);
-    }
-  }
-
-  onPanelModeChange(mode: PanelMode): void {
-    if (mode !== 'date') {
-      this.panelMode = mode;
-    }
-  }
-
-  onValueChange(value: CandyDate): void {
-    super.onValueChange(value);
-
-    this.closeOverlay();
-  }
-
-  onOpenChange(open: boolean): void {
-    if (!open) {
-      this.cleanUp();
-    }
-    this.nzOnOpenChange.emit(open);
-  }
-
-  // Restore some initial props to let open as new in next time
-  private cleanUp(): void {
-    this.panelMode = 'month';
+  constructor(
+    i18n: NzI18nService,
+    cdr: ChangeDetectorRef,
+    dateHelper: DateHelperService,
+    renderer: Renderer2,
+    elementRef: ElementRef,
+    @Host() @Optional() public noAnimation?: NzNoAnimationDirective
+  ) {
+    super(i18n, cdr, dateHelper, noAnimation);
+    renderer.addClass(elementRef.nativeElement, 'ant-calendar-picker');
   }
 }
